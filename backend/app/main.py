@@ -14,10 +14,10 @@ from sse_starlette.sse import EventSourceResponse
 from app.models import (
     ChatCreate, ChatResponse, ChatMessageRequest,
     FileSignRequest, FileSignResponse, FileIngestRequest, FileIngestResponse,
-    AdminOverviewResponse
+    FileDeleteRequest, AdminOverviewResponse
 )
 from app.supabase_client import get_supabase_client
-from app.llm_providers import openai_stream
+from app.llm_providers import openai_stream, test_gpt5_connection
 from app.ingest import ingest_file, get_file_context
 from app.utils import get_settings, get_allowed_origins, generate_file_path, verify_admin_key
 
@@ -219,28 +219,8 @@ async def send_message(chat_id: str, request: ChatMessageRequest):
         # Build messages for LLM
         llm_messages = []
         
-        # System prompt
-        system_prompt = (
-            "You are a helpful, knowledgeable AI assistant for startup founders (legal and business). "
-            "Answer like ChatGPT with clear, polished Markdown. Keep output scannable and well-structured.\n\n"
-            
-            "Default structure (adapt as needed):\n"
-            "- **Direct answer (1–2 sentences)**\n"
-            "- **Key points**: short bullet list of the most important facts or options\n"
-            "- **Next steps**: concise, actionable guidance\n\n"
-            
-            "Formatting rules:\n"
-            "- Prefer short paragraphs (1–3 sentences)\n"
-            "- Use bullets and numbered lists over long blocks of text\n"
-            "- Use headings (##) only for longer explanations\n"
-            "- Use code blocks for code or commands only\n"
-            "- State assumptions briefly and avoid speculation\n\n"
-            
-            "Behavior:\n"
-            "- Be concise and friendly; ask for clarification if critical info is missing\n"
-            "- When legal nuance matters, call it out clearly and suggest safe actions\n"
-            "- Do not include unnecessary preambles; get to the point"
-        )
+        # System prompt - minimal and natural, let the model respond like ChatGPT
+        system_prompt = "You are a helpful AI assistant."
         
         if context:
             system_prompt += f"\n\nDocument Context:\n{context}"
@@ -417,19 +397,52 @@ async def ingest_file_route(request: FileIngestRequest):
 
 
 @app.get("/v1/files/{file_id}")
-async def get_file(file_id: str):
-    """Get file metadata"""
+async def get_file(file_id: str, admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
+    """Get file metadata and download URL"""
     try:
+        logger.info(f"📄 Getting file metadata for: {file_id}")
         file_record = supabase.get_file(file_id)
         
         if not file_record:
+            logger.error(f"❌ File not found: {file_id}")
             raise HTTPException(status_code=404, detail="File not found")
+        
+        # Generate signed download URL
+        settings = get_settings()
+        file_path = file_record.get("file_path")
+        
+        logger.info(f"📍 File path: {file_path}")
+        logger.info(f"📍 Bucket: {settings.bucket_legal}")
+        
+        if file_path:
+            try:
+                logger.info(f"🔐 Generating signed URL for: {file_path}")
+                download_url = supabase.get_signed_download_url(
+                    bucket=settings.bucket_legal,
+                    path=file_path,
+                    expires_in=3600
+                )
+                
+                if download_url:
+                    file_record["download_url"] = download_url
+                    logger.info(f"✅ Generated download URL successfully")
+                else:
+                    logger.error(f"❌ Empty download URL returned")
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to generate download URL: {str(e)}")
+                logger.exception(e)
+                # Don't fail the request, just log the error
+        else:
+            logger.warning(f"⚠️ No file_path in record")
         
         return file_record
     
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"❌ Get file error: {str(e)}")
+        logger.exception(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -441,6 +454,57 @@ async def get_file_chunks(file_id: str):
         return {"chunks": chunks}
     
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/v1/files/{file_id}")
+async def delete_file(file_id: str, request: FileDeleteRequest):
+    """
+    Delete a file and its associated chunks from storage and database
+    """
+    try:
+        logger.info(f"🗑️ Deleting file: {file_id} by user: {request.user_id}")
+        
+        # Get file record to verify ownership and get storage path
+        file_record = supabase.get_file(file_id)
+        
+        if not file_record:
+            logger.error(f"❌ File not found: {file_id}")
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Verify ownership
+        if file_record.get("user_id") != request.user_id:
+            logger.error(f"❌ Unauthorized delete attempt: {file_id} by {request.user_id}")
+            raise HTTPException(status_code=403, detail="Unauthorized")
+        
+        # Delete from storage
+        settings = get_settings()
+        file_path = file_record.get("file_path")
+        
+        if file_path:
+            try:
+                storage_response = supabase.client.storage.from_(settings.bucket_legal).remove([file_path])
+                logger.info(f"✅ Deleted from storage: {file_path}")
+            except Exception as storage_error:
+                logger.warning(f"⚠️ Storage deletion failed (continuing): {storage_error}")
+        
+        # Delete file chunks first (due to foreign key constraint)
+        try:
+            supabase.client.table("file_chunks").delete().eq("file_id", file_id).execute()
+            logger.info(f"✅ Deleted file chunks for: {file_id}")
+        except Exception as chunk_error:
+            logger.warning(f"⚠️ Chunk deletion failed (continuing): {chunk_error}")
+        
+        # Delete file record from database
+        supabase.client.table("files").delete().eq("id", file_id).execute()
+        logger.info(f"✅ Deleted file record: {file_id}")
+        
+        return {"success": True, "message": "File deleted successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ File deletion error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -592,6 +656,131 @@ async def get_user_files_admin(user_id: str, admin_key: str = Header(None, alias
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/v1/admin/files")
+async def get_all_files_admin(admin_key: str = Header(None, alias="X-Admin-Key")):
+    """Get all files across all users (admin only)"""
+    try:
+        verify_admin_key(admin_key)
+        # Query all files from database
+        response = supabase.client.table("files").select("*").order("created_at", desc=True).execute()
+        files = response.data or []
+        logger.info(f"📁 Admin retrieved {len(files)} files")
+        return {'files': files}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Admin all files error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/v1/admin/users/{user_id}")
+async def delete_user_admin(user_id: str, admin_key: str = Header(None, alias="X-Admin-Key")):
+    """Delete a user and all their data (admin only)"""
+    try:
+        verify_admin_key(admin_key)
+        logger.info(f"🗑️ Admin deleting user: {user_id}")
+        
+        # Check if this is a placeholder/test user ID
+        if user_id == "00000000-0000-0000-0000-000000000001" or user_id.startswith("00000000"):
+            logger.warning(f"⚠️ Detected placeholder user ID: {user_id}")
+            logger.warning(f"⚠️ This may be a test user or data inconsistency")
+        
+        settings = get_settings()
+        
+        # Get user's files to delete from storage
+        user_files = supabase.get_user_files(user_id)
+        logger.info(f"📁 Found {len(user_files)} files to delete")
+        
+        # Delete files from storage
+        for file in user_files:
+            file_path = file.get("file_path")
+            if file_path:
+                try:
+                    supabase.client.storage.from_(settings.bucket_legal).remove([file_path])
+                    logger.info(f"✅ Deleted file from storage: {file_path}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to delete file from storage: {e}")
+        
+        # Delete file chunks (CASCADE should handle this, but being explicit)
+        try:
+            supabase.client.table("file_chunks").delete().in_("file_id", [f["id"] for f in user_files]).execute()
+            logger.info(f"✅ Deleted file chunks")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to delete file chunks: {e}")
+        
+        # Delete files from database
+        try:
+            supabase.client.table("files").delete().eq("user_id", user_id).execute()
+            logger.info(f"✅ Deleted files from database")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to delete files: {e}")
+        
+        # Delete messages (CASCADE from chats should handle this)
+        try:
+            supabase.client.table("messages").delete().in_(
+                "chat_id",
+                supabase.client.table("chats").select("id").eq("user_id", user_id).execute().data
+            ).execute()
+            logger.info(f"✅ Deleted messages")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to delete messages: {e}")
+        
+        # Delete chats
+        try:
+            supabase.client.table("chats").delete().eq("user_id", user_id).execute()
+            logger.info(f"✅ Deleted chats")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to delete chats: {e}")
+        
+        # Delete profile
+        try:
+            supabase.client.table("profiles").delete().eq("user_id", user_id).execute()
+            logger.info(f"✅ Deleted profile")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to delete profile: {e}")
+        
+        # Delete auth user (this is the main deletion)
+        try:
+            # Use the correct Supabase admin API method
+            from supabase import Client
+            response = supabase.client.auth.admin.delete_user(user_id)
+            logger.info(f"✅ Deleted auth user: {response}")
+        except AttributeError:
+            # If admin API not available, try alternative method
+            try:
+                logger.warning(f"⚠️ Admin API not available, using alternative deletion method")
+                # Delete using REST API directly
+                import requests
+                settings = get_settings()
+                url = f"{settings.supabase_url}/auth/v1/admin/users/{user_id}"
+                headers = {
+                    "apikey": settings.supabase_service_role_key,
+                    "Authorization": f"Bearer {settings.supabase_service_role_key}"
+                }
+                response = requests.delete(url, headers=headers)
+                if response.status_code not in [200, 204]:
+                    logger.error(f"❌ Failed to delete auth user: {response.text}")
+                    raise Exception(f"Auth deletion failed: {response.text}")
+                logger.info(f"✅ Deleted auth user via REST API")
+            except Exception as alt_e:
+                logger.error(f"❌ Alternative deletion also failed: {alt_e}")
+                # Continue anyway - data is already deleted
+                logger.warning(f"⚠️ User data deleted but auth account may still exist")
+        except Exception as e:
+            logger.error(f"❌ Failed to delete auth user: {e}")
+            # Don't fail the entire operation - data is already deleted
+            logger.warning(f"⚠️ User data deleted but auth account may still exist")
+        
+        logger.info(f"✅ User {user_id} deleted successfully")
+        return {"success": True, "message": "User deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Admin delete user error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/v1/admin/chats/{chat_id}/messages")
 async def get_chat_messages_admin(chat_id: str, admin_key: str = Header(None, alias="X-Admin-Key")):
     """Get all messages in a chat (admin only)"""
@@ -628,4 +817,17 @@ async def internal_error_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Scopic Legal Backend")
+    parser.add_argument("--test-gpt5", action="store_true", help="Test GPT-5 connectivity and availability")
+    args = parser.parse_args()
+
+    if args.test_gpt5:
+        ok = test_gpt5_connection()
+        if ok:
+            print("GPT-5 available ✅")
+        else:
+            print("GPT-5 unavailable ❌ — use gpt-4o until access is enabled.")
+    else:
+        uvicorn.run(app, host="0.0.0.0", port=8080)

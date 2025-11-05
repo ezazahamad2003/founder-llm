@@ -4,6 +4,17 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Profiles table (user metadata)
+CREATE TABLE IF NOT EXISTS profiles (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT,
+    role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    terms_version TEXT,
+    accepted_terms_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Chats table
 CREATE TABLE IF NOT EXISTS chats (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -58,10 +69,21 @@ CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
 CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id);
 
 -- RLS Policies (Row Level Security)
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE file_chunks ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can manage their own profile
+CREATE POLICY "Users can view own profile" ON profiles
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own profile" ON profiles
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own profile" ON profiles
+    FOR UPDATE USING (auth.uid() = user_id);
 
 -- Policy: Users can only see their own chats
 CREATE POLICY "Users can view own chats" ON chats
@@ -102,6 +124,9 @@ CREATE POLICY "Users can insert own files" ON files
 CREATE POLICY "Users can update own files" ON files
     FOR UPDATE USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can delete own files" ON files
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- Policy: Users can view chunks of their files
 CREATE POLICY "Users can view own file chunks" ON file_chunks
     FOR SELECT USING (
@@ -114,6 +139,15 @@ CREATE POLICY "Users can view own file chunks" ON file_chunks
 
 CREATE POLICY "Users can insert chunks for own files" ON file_chunks
     FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM files 
+            WHERE files.id = file_chunks.file_id 
+            AND files.user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can delete own file chunks" ON file_chunks
+    FOR DELETE USING (
         EXISTS (
             SELECT 1 FROM files 
             WHERE files.id = file_chunks.file_id 

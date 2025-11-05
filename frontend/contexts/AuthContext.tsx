@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, fullName?: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -43,8 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(user)
   }
 
-  const handleSignUp = async (email: string, password: string) => {
-    await signUp(email, password)
+  const handleSignUp = async (email: string, password: string, fullName?: string) => {
+    await signUp(email, password, fullName)
     const user = await getCurrentUser()
     setUser(user)
   }

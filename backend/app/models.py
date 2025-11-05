@@ -3,14 +3,24 @@ Pydantic models for request/response validation
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 # Chat Models
 class ChatCreate(BaseModel):
     user_id: str
     title: Optional[str] = None
+    
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate that user_id is a valid UUID"""
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError(f'user_id must be a valid UUID, got: {v}')
 
 
 class ChatResponse(BaseModel):
@@ -41,6 +51,15 @@ class ChatMessageRequest(BaseModel):
     user_id: str
     file_ids: Optional[List[str]] = []
     stream: bool = True
+    
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate that user_id is a valid UUID"""
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError(f'user_id must be a valid UUID, got: {v}')
 
 
 # File Models
@@ -49,6 +68,15 @@ class FileSignRequest(BaseModel):
     content_type: str
     user_id: str
     chat_id: Optional[str] = None  # ✅ Link files to chats
+    
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate that user_id is a valid UUID"""
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError(f'user_id must be a valid UUID, got: {v}')
 
 
 class FileSignResponse(BaseModel):
@@ -62,6 +90,15 @@ class FileIngestRequest(BaseModel):
     file_id: str
     user_id: str
     chat_id: Optional[str] = None
+    
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate that user_id is a valid UUID"""
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError(f'user_id must be a valid UUID, got: {v}')
 
 
 class FileIngestResponse(BaseModel):
@@ -69,6 +106,19 @@ class FileIngestResponse(BaseModel):
     status: str
     chunks_created: int
     message: str
+
+
+class FileDeleteRequest(BaseModel):
+    user_id: str
+    
+    @validator('user_id')
+    def validate_user_id(cls, v):
+        """Validate that user_id is a valid UUID"""
+        try:
+            UUID(v)
+            return v
+        except ValueError:
+            raise ValueError(f'user_id must be a valid UUID, got: {v}')
 
 
 class FileResponse(BaseModel):

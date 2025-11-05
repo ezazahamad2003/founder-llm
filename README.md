@@ -1,33 +1,112 @@
-# Scopic Legal
+# Scopic Legal - AI-Powered Legal Assistant for Startup Founders
 
-AI-powered legal assistant for startup founders built with FastAPI, Next.js, and OpenAI.
+> Get instant legal guidance powered by GPT-5. Upload documents, ask questions, and receive clear answers tailored to your startup's needs.
 
-## Project Structure
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green)](https://fastapi.tiangolo.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-blue)](https://supabase.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-yellow)](https://www.python.org/)
+
+---
+
+## 🚀 Features
+
+### For Founders
+- **💬 AI Legal Chat** - Ask legal questions and get instant GPT-5 powered answers
+- **📄 Document Analysis** - Upload contracts, NDAs, and agreements for AI analysis
+- **🔒 Secure & Private** - End-to-end encryption, your data never leaves your control
+- **📚 Context-Aware** - AI remembers your documents and previous conversations
+- **⚡ Instant Answers** - No waiting, no scheduling, available 24/7
+
+### For Lawyers/Admins
+- **👥 User Management** - View all users and their activity
+- **📊 Analytics Dashboard** - Monitor usage, files, and conversations
+- **🗑️ Data Management** - Delete users and their data (GDPR compliant)
+- **📁 File Access** - View and download all uploaded documents
+
+---
+
+## 🏗️ Architecture
 
 ```
-scopic-legal/
-├── backend/          # FastAPI backend with OpenAI integration
-├── frontend/         # Next.js frontend with real-time chat
-├── AUTH_SETUP.md     # Authentication setup guide
-└── TESTING_GUIDE.md  # Testing documentation
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│   Next.js       │─────▶│   FastAPI       │─────▶│   Supabase      │
+│   Frontend      │      │   Backend       │      │   Database      │
+│   (Vercel)      │      │   (GCP)         │      │   + Storage     │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
+        │                         │                         │
+        │                         │                         │
+        └─────────────────────────┴─────────────────────────┘
+                         OpenAI GPT-5 API
 ```
 
-## Quick Start
+### Tech Stack
 
-### Backend
+**Frontend**
+- Next.js 14 (App Router)
+- React 18
+- TypeScript
+- TailwindCSS
+- Supabase Client
+
+**Backend**
+- FastAPI (Python 3.11)
+- OpenAI GPT-5
+- Supabase (PostgreSQL + Auth + Storage)
+- PyPDF2 (Document processing)
+
+**Infrastructure**
+- Vercel (Frontend hosting)
+- GCP Cloud Run (Backend hosting)
+- Supabase (Database + Auth + Storage)
+
+---
+
+## 📦 Project Structure
+
+```
+founder-llm/
+├── frontend/              # Next.js application
+│   ├── app/              # App router pages
+│   ├── components/       # React components
+│   ├── contexts/         # React contexts
+│   └── lib/              # Utilities
+├── backend/              # FastAPI application
+│   ├── app/              # Application code
+│   │   ├── main.py      # FastAPI app
+│   │   ├── models.py    # Pydantic models
+│   │   ├── supabase_client.py
+│   │   ├── llm_providers.py
+│   │   └── ingest.py    # Document processing
+│   ├── migrations/       # Database migrations
+│   └── requirements.txt
+├── terms/                # Legal documents
+├── .env.example         # Environment template
+├── .gitignore           # Git ignore rules
+├── README.md            # This file
+└── DEPLOYMENT.md        # Deployment guide
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Python 3.11+
+- Supabase account
+- OpenAI API key
+
+### 1. Clone and Install
 
 ```bash
-cd backend
-pip install -r requirements.txt
-cp .env.sample .env  # Add your API keys
-uvicorn app.main:app --reload --port 8080
-```
+# Clone repository
+git clone <your-repo-url>
+cd founder-llm
 
-See `backend/README.md` for detailed setup.
-
-### Frontend
-
-```bash
+# Install frontend dependencies
 cd frontend
 npm install
 cp .env.local.example .env.local  # Add your config

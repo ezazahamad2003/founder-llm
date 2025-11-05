@@ -250,8 +250,32 @@ class SupabaseClient:
     
     def get_signed_download_url(self, bucket: str, path: str, expires_in: int = 3600) -> str:
         """Generate a signed URL for file download"""
-        response = self.client.storage.from_(bucket).create_signed_url(path, expires_in)
-        return response.get("signedURL", "")
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            logger.info(f"🔐 Creating signed URL for bucket='{bucket}', path='{path}'")
+            response = self.client.storage.from_(bucket).create_signed_url(path, expires_in)
+            
+            logger.info(f"📦 Supabase response: {response}")
+            
+            # Handle different response formats
+            if isinstance(response, dict):
+                signed_url = response.get("signedURL") or response.get("signed_url")
+                if signed_url:
+                    logger.info(f"✅ Signed URL created successfully")
+                    return signed_url
+                else:
+                    logger.error(f"❌ No signedURL in response: {response}")
+                    return ""
+            else:
+                logger.error(f"❌ Unexpected response type: {type(response)}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"❌ Error creating signed URL: {str(e)}")
+            logger.exception(e)
+            raise
     
     def download_file(self, bucket: str, path: str) -> bytes:
         """Download file from storage"""

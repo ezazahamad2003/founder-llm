@@ -145,14 +145,21 @@ export default function ChatInterface({ chatId, userId, selectedFiles, onFileSel
                 }`}
               >
                 {message.role === 'assistant' ? (
-                  <div className="prose prose-sm max-w-none prose-invert 
-                    prose-headings:text-white prose-headings:font-semibold
-                    prose-p:text-gray-200 prose-p:leading-relaxed
+                  <div className="prose prose-base max-w-none prose-invert
+                    prose-headings:text-white prose-headings:font-semibold prose-headings:mb-4
+                    prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg
+                    prose-p:text-gray-200 prose-p:leading-relaxed prose-p:mb-4
                     prose-strong:text-white prose-strong:font-semibold
-                    prose-ul:text-gray-200 prose-ol:text-gray-200
-                    prose-li:text-gray-200 prose-li:my-1
-                    prose-code:text-blue-400 prose-code:bg-gray-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
-                    prose-pre:bg-gray-800 prose-pre:border prose-pre:border-gray-700">
+                    prose-ul:my-4 prose-ul:text-gray-200 prose-ul:list-disc prose-ul:pl-6
+                    prose-ol:my-4 prose-ol:text-gray-200 prose-ol:list-decimal prose-ol:pl-6
+                    prose-li:text-gray-200 prose-li:my-2 prose-li:leading-relaxed
+                    prose-code:text-blue-400 prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
+                    prose-pre:bg-gray-800 prose-pre:border prose-pre:border-gray-700 prose-pre:rounded-lg prose-pre:p-4
+                    prose-blockquote:border-l-4 prose-blockquote:border-gray-600 prose-blockquote:pl-4 prose-blockquote:italic
+                    prose-hr:border-gray-700 prose-hr:my-8
+                    prose-table:border prose-table:border-gray-700
+                    prose-th:border prose-th:border-gray-700 prose-th:bg-gray-800 prose-th:p-2
+                    prose-td:border prose-td:border-gray-700 prose-td:p-2">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {message.content}
                     </ReactMarkdown>

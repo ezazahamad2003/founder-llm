@@ -1,13 +1,65 @@
-# Python
+# ============================================================================
+# COMPREHENSIVE .GITIGNORE FOR FULLSTACK PROJECT
+# Next.js Frontend + FastAPI Backend + Supabase
+# ============================================================================
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+.env
+.env.local
+.env.dev
+.env.test
+.env.production
+.env.*.local
+*.env
+!.env.example
+!.env.sample
+
+# ============================================================================
+# NODE / REACT / NEXT.JS
+# ============================================================================
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo
+.vercel/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# ============================================================================
+# PYTHON / FASTAPI
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-*.egg
-*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
 dist/
 build/
+*.egg
+*.egg-info/
 eggs/
 .eggs/
 lib/
@@ -21,90 +73,120 @@ share/python-wheels/
 *.manifest
 *.spec
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+# Testing / Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Type checking / Linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
 
-# IDE
+# ============================================================================
+# JUPYTER NOTEBOOK
+# ============================================================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# ============================================================================
+# DATABASE
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# ============================================================================
+# SUPABASE / STORAGE
+# ============================================================================
+supabase/.temp/
+supabase/.branches/
+storage/
+tmp/
+temp/
+
+# ============================================================================
+# IDE / EDITORS
+# ============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
+*.swn
 *~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.metadata/
+.cursor/
+
+# ============================================================================
+# OS SPECIFIC
+# ============================================================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.AppleDouble
+.LSOverride
+Icon
 
-# Frontend
-node_modules/
-.next/
-out/
-build/
-dist/
+# Windows
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ============================================================================
+# LOGS
+# ============================================================================
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-.turbo
+logs/
+*.log.*
+log/
 
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-.tox/
-coverage.xml
-*.cover
-
-# Temporary files
+# ============================================================================
+# TEMPORARY / CACHE
+# ============================================================================
 *.tmp
 *.bak
 *.swp
-*~
+*.cache
 .cache/
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-*.log
-logs/
-
-# Docker
-*.pid
-
-# Next.js specific
-.vercel
-.env*.local
-.next/
-out/
-
-# Python specific
-*.pyc
-__pycache__/
-instance/
+.temp/
 .webassets-cache
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# ============================================================================
+# BUILD ARTIFACTS
+# ============================================================================
+*.pid
+*.seed
+*.pid.lock
 
-# pyenv
-.python-version
-
-# Misc
-.DS_Store
+# ============================================================================
+# SECURITY
+# ============================================================================
 *.pem
-.AppleDouble
-.LSOverride
+*.key
+*.cert
+*.crt
+.secrets/
+
+# ============================================================================
+# MISC
+# ============================================================================
+.git/
+.gitattributes
