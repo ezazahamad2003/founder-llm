@@ -19,9 +19,12 @@ class SupabaseClient:
         logger.info(f"Supabase URL: {settings.supabase_url}")
         logger.info(f"Service key length: {len(settings.supabase_service_role_key) if settings.supabase_service_role_key else 0}")
         
+        # Strip whitespace from service key (important for secrets from GCP Secret Manager)
+        service_key = settings.supabase_service_role_key.strip() if settings.supabase_service_role_key else ""
+        
         self.client: Client = create_client(
             settings.supabase_url,
-            settings.supabase_service_role_key
+            service_key
         )
     
     # Chat operations
