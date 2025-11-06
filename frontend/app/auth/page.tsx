@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { supabase, getProfile } from '@/lib/supabase'
 
-export default function AuthPage() {
+function AuthForm() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -214,5 +214,17 @@ export default function AuthPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#212121] flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    }>
+      <AuthForm />
+    </Suspense>
   )
 }
