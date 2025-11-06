@@ -143,7 +143,7 @@ async def openai_stream(
 
 def test_gpt5_connection() -> bool:
     """
-    Try a simple GPT-5 completion. Returns True if available.
+    Try a simple GPT-5 completion using the Responses API. Returns True if available.
     Behavior:
       - If 400/404/model_not_found: log and suggest using gpt-4o; return False
       - On network/timeout: retry twice with exponential backoff
@@ -156,15 +156,13 @@ def test_gpt5_connection() -> bool:
     # Always test GPT-5 explicitly as primary
     target_model = 'gpt-5'
 
-    payload = {
-        "model": target_model,
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Reply with the word: READY"},
-        ],
-        "max_completion_tokens": 5,
-        "temperature": 0.0,
-    }
+    # GPT-5 uses the Responses API, not Chat Completions
+    test_input = [
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": "Reply with the word: READY"}],
+        }
+    ]
 
     attempts = 0
     delay = 0.5
@@ -172,8 +170,21 @@ def test_gpt5_connection() -> bool:
         try:
             attempts += 1
             logger.info(f"🔎 Testing GPT-5 connectivity (attempt {attempts})")
-            resp = client.chat.completions.create(**payload)
-            text = resp.choices[0].message.content if resp.choices else ""
+            resp = client.responses.create(
+                model=target_model,
+                input=test_input,
+                max_output_tokens=16,
+            )
+            # Extract response text
+            text = ""
+            try:
+                text = resp.output_text if hasattr(resp, "output_text") else ""
+                if not text and hasattr(resp, "output"):
+                    first = resp.output[0]
+                    text = getattr(first, "content", [{}])[0].get("text", {}).get("value", "")
+            except Exception:
+                text = ""
+            
             logger.info(f"✅ GPT-5 test succeeded. Sample: '{text}'")
             return True
         except Exception as e:

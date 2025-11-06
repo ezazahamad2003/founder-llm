@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Users, MessageSquare, FileText, Eye, LogOut, Trash2 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-const ADMIN_KEY = '0123456' // From backend .env ADMIN_TOKEN
+const ADMIN_KEY = 'scopic-admin-2025-secure-token-xyz789' // From backend .env ADMIN_TOKEN
 
 interface User {
   id: string
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
         headers: { 'X-Admin-Key': ADMIN_KEY }
       })
       const data = await response.json()
-      setUsers(data.users)
+      setUsers(data.users || [])
       setLoading(false)
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -420,10 +420,10 @@ export default function AdminDashboard() {
           <div className="bg-[#2f2f2f] rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Users ({users.length})
+              Users ({users?.length || 0})
             </h2>
             <div className="space-y-2 max-h-[600px] overflow-y-auto">
-              {users.map((user) => (
+              {users?.map((user) => (
                 <div
                   key={user.id}
                   className={`relative p-4 rounded-lg transition-colors ${

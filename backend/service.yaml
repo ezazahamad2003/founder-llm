@@ -4,7 +4,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: calix-backend
+  name: scopic-legal-backend
   labels:
     cloud.googleapis.com/location: us-central1
 spec:
@@ -17,7 +17,7 @@ spec:
       containerConcurrency: 80
       timeoutSeconds: 300
       containers:
-      - image: gcr.io/YOUR_PROJECT_ID/calix-backend
+      - image: gcr.io/agentops-477011/scopic-legal-backend
         ports:
         - name: http1
           containerPort: 8080
@@ -25,15 +25,15 @@ spec:
         - name: ENVIRONMENT
           value: production
         - name: MODEL_ID
-          value: o5
+          value: gpt-5
         - name: SUPABASE_URL
-          value: https://your-project.supabase.co
+          value: https://yxjboezofmbuebiuzqej.supabase.co
         - name: BUCKET_LEGAL
           value: legal-docs
         - name: BUCKET_IMAGES
           value: images
         - name: ALLOWED_ORIGINS
-          value: https://your-frontend.vercel.app
+          value: "http://localhost:3000,https://your-vercel-domain.vercel.app"
         # Secrets should be loaded from Secret Manager
         - name: SUPABASE_SERVICE_ROLE_KEY
           valueFrom:

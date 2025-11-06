@@ -128,8 +128,8 @@ export default function LandingPage() {
           <div className="flex justify-between items-center text-sm text-gray-500">
             <p>© 2025 Scopic Legal. All rights reserved.</p>
             <div className="flex gap-6">
-              <Link href="/terms" className="hover:text-gray-300">Terms of Use</Link>
-              <Link href="/privacy" className="hover:text-gray-300">Privacy Policy</Link>
+              <a href="/terms/Terms of Use for Design Partner Program.docx" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">Terms of Use</a>
+              <a href="/terms/Privacy Policy for Design Partner Program.docx" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300">Privacy Policy</a>
             </div>
           </div>
         </div>

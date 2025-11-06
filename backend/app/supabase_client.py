@@ -11,7 +11,14 @@ class SupabaseClient:
     """Wrapper for Supabase operations"""
     
     def __init__(self):
+        import logging
+        logger = logging.getLogger(__name__)
         settings = get_settings()
+        
+        # Debug logging
+        logger.info(f"Supabase URL: {settings.supabase_url}")
+        logger.info(f"Service key length: {len(settings.supabase_service_role_key) if settings.supabase_service_role_key else 0}")
+        
         self.client: Client = create_client(
             settings.supabase_url,
             settings.supabase_service_role_key

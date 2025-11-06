@@ -44,8 +44,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize clients
-supabase = get_supabase_client()
+# Supabase client will be initialized lazily on first use
+def get_supabase():
+    """Get Supabase client instance"""
+    return get_supabase_client()
 
 
 @app.get("/")
@@ -80,7 +82,7 @@ async def create_chat(chat_data: ChatCreate):
     """Create a new chat"""
     try:
         logger.info(f"📝 Creating new chat for user: {chat_data.user_id}")
-        chat = supabase.create_chat(
+        chat = get_supabase().create_chat(
             user_id=chat_data.user_id,
             title=chat_data.title
         )
@@ -101,7 +103,7 @@ async def create_chat(chat_data: ChatCreate):
 async def get_chat(chat_id: str):
     """Get a specific chat"""
     try:
-        chat = supabase.get_chat(chat_id)
+        chat = get_supabase().get_chat(chat_id)
         
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found")
@@ -135,33 +137,33 @@ async def delete_chat(chat_id: str, user_id: Optional[str] = Header(None, alias=
             raise HTTPException(status_code=400, detail="Missing X-User-Id header")
 
         # Verify chat exists and ownership
-        chat = supabase.get_chat(chat_id)
+        chat = get_supabase().get_chat(chat_id)
         if not chat:
             raise HTTPException(status_code=404, detail="Chat not found")
         if chat.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized to delete this chat")
 
         # Delete messages
-        supabase.delete_messages_by_chat(chat_id)
+        get_supabase().delete_messages_by_chat(chat_id)
 
         # Gather files for this chat
-        files = supabase.get_files_by_chat(chat_id)
+        files = get_supabase().get_files_by_chat(chat_id)
         file_ids = [f["id"] for f in files]
 
         # Delete file chunks
-        supabase.delete_file_chunks_by_file_ids(file_ids)
+        get_supabase().delete_file_chunks_by_file_ids(file_ids)
 
         # Delete files from storage (best-effort)
         for f in files:
             path = f.get("file_path")
             if path:
-                supabase.delete_storage_file(path)
+                get_supabase().delete_storage_file(path)
 
         # Delete file records
-        supabase.delete_file_records_by_ids(file_ids)
+        get_supabase().delete_file_records_by_ids(file_ids)
 
         # Finally delete the chat
-        supabase.delete_chat(chat_id)
+        get_supabase().delete_chat(chat_id)
 
         return {"status": "deleted", "chat_id": chat_id}
 
@@ -174,7 +176,7 @@ async def delete_chat(chat_id: str, user_id: Optional[str] = Header(None, alias=
 async def get_chat_messages(chat_id: str, limit: int = 100):
     """Get all messages for a chat"""
     try:
-        messages = supabase.get_chat_messages(chat_id, limit=limit)
+        messages = get_supabase().get_chat_messages(chat_id, limit=limit)
         return {"messages": messages}
     
     except Exception as e:
@@ -191,20 +193,20 @@ async def send_message(chat_id: str, request: ChatMessageRequest):
         logger.info(f"💬 New message in chat {chat_id}: '{request.message[:50]}...'")
         
         # Verify chat exists
-        chat = supabase.get_chat(chat_id)
+        chat = get_supabase().get_chat(chat_id)
         if not chat:
             logger.error(f"❌ Chat not found: {chat_id}")
             raise HTTPException(status_code=404, detail="Chat not found")
         
         # Save user message
-        supabase.create_message(
+        get_supabase().create_message(
             chat_id=chat_id,
             role="user",
             content=request.message
         )
         
         # Get chat history
-        messages = supabase.get_chat_messages(chat_id, limit=20)
+        messages = get_supabase().get_chat_messages(chat_id, limit=20)
         
         # Get file context if file_ids provided
         context = ""
@@ -272,7 +274,7 @@ async def send_message(chat_id: str, request: ChatMessageRequest):
                 # Save assistant response
                 if full_response:
                     logger.info(f"💾 Saving assistant response ({len(full_response)} chars)")
-                    supabase.create_message(
+                    get_supabase().create_message(
                         chat_id=chat_id,
                         role="assistant",
                         content=full_response
@@ -308,7 +310,7 @@ async def sign_file_upload(request: FileSignRequest):
         file_path = generate_file_path(request.user_id, request.filename)
         
         # Create file record in database
-        file_record = supabase.create_file(
+        file_record = get_supabase().create_file(
             user_id=request.user_id,
             filename=request.filename,
             file_path=file_path,
@@ -323,7 +325,7 @@ async def sign_file_upload(request: FileSignRequest):
         logger.info(f"✅ File record created: {file_record['id']}")
         
         # Generate signed upload URL
-        upload_response = supabase.get_signed_upload_url(
+        upload_response = get_supabase().get_signed_upload_url(
             bucket=settings.bucket_legal,
             path=file_path,
             expires_in=3600
@@ -339,7 +341,7 @@ async def sign_file_upload(request: FileSignRequest):
         # Update file record with actual storage path if different
         if actual_path != file_path:
             logger.info(f"⚠️ Path mismatch - updating file record")
-            supabase.client.table("files").update({"file_path": actual_path}).eq("id", file_record["id"]).execute()
+            get_supabase().client.table("files").update({"file_path": actual_path}).eq("id", file_record["id"]).execute()
         
         return FileSignResponse(
             file_id=file_record["id"],
@@ -361,7 +363,7 @@ async def ingest_file_route(request: FileIngestRequest):
     try:
         logger.info(f"🔍 Starting file ingestion for file_id: {request.file_id}")
         # Verify file exists
-        file_record = supabase.get_file(request.file_id)
+        file_record = get_supabase().get_file(request.file_id)
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found")
         
@@ -401,7 +403,7 @@ async def get_file(file_id: str, admin_key: Optional[str] = Header(None, alias="
     """Get file metadata and download URL"""
     try:
         logger.info(f"📄 Getting file metadata for: {file_id}")
-        file_record = supabase.get_file(file_id)
+        file_record = get_supabase().get_file(file_id)
         
         if not file_record:
             logger.error(f"❌ File not found: {file_id}")
@@ -417,7 +419,7 @@ async def get_file(file_id: str, admin_key: Optional[str] = Header(None, alias="
         if file_path:
             try:
                 logger.info(f"🔐 Generating signed URL for: {file_path}")
-                download_url = supabase.get_signed_download_url(
+                download_url = get_supabase().get_signed_download_url(
                     bucket=settings.bucket_legal,
                     path=file_path,
                     expires_in=3600
@@ -450,7 +452,7 @@ async def get_file(file_id: str, admin_key: Optional[str] = Header(None, alias="
 async def get_file_chunks(file_id: str):
     """Get all chunks for a file"""
     try:
-        chunks = supabase.get_file_chunks(file_id)
+        chunks = get_supabase().get_file_chunks(file_id)
         return {"chunks": chunks}
     
     except Exception as e:
@@ -466,7 +468,7 @@ async def delete_file(file_id: str, request: FileDeleteRequest):
         logger.info(f"🗑️ Deleting file: {file_id} by user: {request.user_id}")
         
         # Get file record to verify ownership and get storage path
-        file_record = supabase.get_file(file_id)
+        file_record = get_supabase().get_file(file_id)
         
         if not file_record:
             logger.error(f"❌ File not found: {file_id}")
@@ -483,20 +485,20 @@ async def delete_file(file_id: str, request: FileDeleteRequest):
         
         if file_path:
             try:
-                storage_response = supabase.client.storage.from_(settings.bucket_legal).remove([file_path])
+                storage_response = get_supabase().client.storage.from_(settings.bucket_legal).remove([file_path])
                 logger.info(f"✅ Deleted from storage: {file_path}")
             except Exception as storage_error:
                 logger.warning(f"⚠️ Storage deletion failed (continuing): {storage_error}")
         
         # Delete file chunks first (due to foreign key constraint)
         try:
-            supabase.client.table("file_chunks").delete().eq("file_id", file_id).execute()
+            get_supabase().client.table("file_chunks").delete().eq("file_id", file_id).execute()
             logger.info(f"✅ Deleted file chunks for: {file_id}")
         except Exception as chunk_error:
             logger.warning(f"⚠️ Chunk deletion failed (continuing): {chunk_error}")
         
         # Delete file record from database
-        supabase.client.table("files").delete().eq("id", file_id).execute()
+        get_supabase().client.table("files").delete().eq("id", file_id).execute()
         logger.info(f"✅ Deleted file record: {file_id}")
         
         return {"success": True, "message": "File deleted successfully"}
@@ -525,7 +527,7 @@ async def admin_overview(x_admin_key: Optional[str] = Header(None)):
         )
     
     try:
-        stats = supabase.get_admin_stats()
+        stats = get_supabase().get_admin_stats()
         return AdminOverviewResponse(**stats)
     
     except Exception as e:
@@ -540,7 +542,7 @@ async def admin_overview(x_admin_key: Optional[str] = Header(None)):
 async def get_user_chats(user_id: str, limit: int = 50):
     """Get all chats for a user"""
     try:
-        chats = supabase.get_user_chats(user_id, limit=limit)
+        chats = get_supabase().get_user_chats(user_id, limit=limit)
         return {"chats": chats}
     
     except Exception as e:
@@ -551,7 +553,7 @@ async def get_user_chats(user_id: str, limit: int = 50):
 async def get_user_files(user_id: str, limit: int = 50, chat_id: Optional[str] = None):
     """Get all files for a user, optionally filtered by chat_id"""
     try:
-        files = supabase.get_user_files(user_id, limit=limit, chat_id=chat_id)
+        files = get_supabase().get_user_files(user_id, limit=limit, chat_id=chat_id)
         return {"files": files}
     
     except Exception as e:
@@ -570,7 +572,7 @@ async def get_all_users(admin_key: str = Header(None, alias="X-Admin-Key")):
         logger.info("🔐 Admin: Fetching all users")
         
         # Get unique user IDs from chats table
-        chats_response = supabase.client.table('chats').select('user_id').execute()
+        chats_response = get_supabase().client.table('chats').select('user_id').execute()
         user_ids = list(set([chat['user_id'] for chat in chats_response.data])) if chats_response.data else []
         
         logger.info(f"📊 Found {len(user_ids)} unique users")
@@ -579,18 +581,18 @@ async def get_all_users(admin_key: str = Header(None, alias="X-Admin-Key")):
         for user_id in user_ids:
             # Get user info from auth.users using admin API
             try:
-                user_response = supabase.client.auth.admin.get_user_by_id(user_id)
+                user_response = get_supabase().client.auth.admin.get_user_by_id(user_id)
                 user = user_response.user if hasattr(user_response, 'user') else None
                 
                 if not user:
                     continue
                 
                 # Get user's chat count
-                chats = supabase.client.table('chats').select('id').eq('user_id', user_id).execute()
+                chats = get_supabase().client.table('chats').select('id').eq('user_id', user_id).execute()
                 chat_count = len(chats.data) if chats.data else 0
                 
                 # Get user's file count
-                files = supabase.client.table('files').select('id').eq('user_id', user_id).execute()
+                files = get_supabase().client.table('files').select('id').eq('user_id', user_id).execute()
                 file_count = len(files.data) if files.data else 0
                 
                 user_data.append({
@@ -604,9 +606,9 @@ async def get_all_users(admin_key: str = Header(None, alias="X-Admin-Key")):
             except Exception as user_error:
                 logger.error(f"❌ Error fetching user {user_id}: {str(user_error)}")
                 # Still include user with basic info
-                chats = supabase.client.table('chats').select('id, created_at').eq('user_id', user_id).execute()
+                chats = get_supabase().client.table('chats').select('id, created_at').eq('user_id', user_id).execute()
                 chat_count = len(chats.data) if chats.data else 0
-                files = supabase.client.table('files').select('id').eq('user_id', user_id).execute()
+                files = get_supabase().client.table('files').select('id').eq('user_id', user_id).execute()
                 file_count = len(files.data) if files.data else 0
                 
                 user_data.append({
@@ -633,7 +635,7 @@ async def get_user_chats_admin(user_id: str, admin_key: str = Header(None, alias
     """Get all chats for a specific user (admin only)"""
     try:
         verify_admin_key(admin_key)
-        chats = supabase.get_user_chats(user_id)
+        chats = get_supabase().get_user_chats(user_id)
         return {'chats': chats}
     except HTTPException:
         raise
@@ -647,7 +649,7 @@ async def get_user_files_admin(user_id: str, admin_key: str = Header(None, alias
     """Get all files for a specific user (admin only)"""
     try:
         verify_admin_key(admin_key)
-        files = supabase.get_user_files(user_id)
+        files = get_supabase().get_user_files(user_id)
         return {'files': files}
     except HTTPException:
         raise
@@ -662,7 +664,7 @@ async def get_all_files_admin(admin_key: str = Header(None, alias="X-Admin-Key")
     try:
         verify_admin_key(admin_key)
         # Query all files from database
-        response = supabase.client.table("files").select("*").order("created_at", desc=True).execute()
+        response = get_supabase().client.table("files").select("*").order("created_at", desc=True).execute()
         files = response.data or []
         logger.info(f"📁 Admin retrieved {len(files)} files")
         return {'files': files}
@@ -688,7 +690,7 @@ async def delete_user_admin(user_id: str, admin_key: str = Header(None, alias="X
         settings = get_settings()
         
         # Get user's files to delete from storage
-        user_files = supabase.get_user_files(user_id)
+        user_files = get_supabase().get_user_files(user_id)
         logger.info(f"📁 Found {len(user_files)} files to delete")
         
         # Delete files from storage
@@ -696,30 +698,30 @@ async def delete_user_admin(user_id: str, admin_key: str = Header(None, alias="X
             file_path = file.get("file_path")
             if file_path:
                 try:
-                    supabase.client.storage.from_(settings.bucket_legal).remove([file_path])
+                    get_supabase().client.storage.from_(settings.bucket_legal).remove([file_path])
                     logger.info(f"✅ Deleted file from storage: {file_path}")
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to delete file from storage: {e}")
         
         # Delete file chunks (CASCADE should handle this, but being explicit)
         try:
-            supabase.client.table("file_chunks").delete().in_("file_id", [f["id"] for f in user_files]).execute()
+            get_supabase().client.table("file_chunks").delete().in_("file_id", [f["id"] for f in user_files]).execute()
             logger.info(f"✅ Deleted file chunks")
         except Exception as e:
             logger.warning(f"⚠️ Failed to delete file chunks: {e}")
         
         # Delete files from database
         try:
-            supabase.client.table("files").delete().eq("user_id", user_id).execute()
+            get_supabase().client.table("files").delete().eq("user_id", user_id).execute()
             logger.info(f"✅ Deleted files from database")
         except Exception as e:
             logger.warning(f"⚠️ Failed to delete files: {e}")
         
         # Delete messages (CASCADE from chats should handle this)
         try:
-            supabase.client.table("messages").delete().in_(
+            get_supabase().client.table("messages").delete().in_(
                 "chat_id",
-                supabase.client.table("chats").select("id").eq("user_id", user_id).execute().data
+                get_supabase().client.table("chats").select("id").eq("user_id", user_id).execute().data
             ).execute()
             logger.info(f"✅ Deleted messages")
         except Exception as e:
@@ -727,14 +729,14 @@ async def delete_user_admin(user_id: str, admin_key: str = Header(None, alias="X
         
         # Delete chats
         try:
-            supabase.client.table("chats").delete().eq("user_id", user_id).execute()
+            get_supabase().client.table("chats").delete().eq("user_id", user_id).execute()
             logger.info(f"✅ Deleted chats")
         except Exception as e:
             logger.warning(f"⚠️ Failed to delete chats: {e}")
         
         # Delete profile
         try:
-            supabase.client.table("profiles").delete().eq("user_id", user_id).execute()
+            get_supabase().client.table("profiles").delete().eq("user_id", user_id).execute()
             logger.info(f"✅ Deleted profile")
         except Exception as e:
             logger.warning(f"⚠️ Failed to delete profile: {e}")
@@ -743,7 +745,7 @@ async def delete_user_admin(user_id: str, admin_key: str = Header(None, alias="X
         try:
             # Use the correct Supabase admin API method
             from supabase import Client
-            response = supabase.client.auth.admin.delete_user(user_id)
+            response = get_supabase().client.auth.admin.delete_user(user_id)
             logger.info(f"✅ Deleted auth user: {response}")
         except AttributeError:
             # If admin API not available, try alternative method
@@ -786,7 +788,7 @@ async def get_chat_messages_admin(chat_id: str, admin_key: str = Header(None, al
     """Get all messages in a chat (admin only)"""
     try:
         verify_admin_key(admin_key)
-        messages = supabase.get_chat_messages(chat_id)
+        messages = get_supabase().get_chat_messages(chat_id)
         return {'messages': messages}
     except HTTPException:
         raise
@@ -831,3 +833,4 @@ if __name__ == "__main__":
             print("GPT-5 unavailable ❌ — use gpt-4o until access is enabled.")
     else:
         uvicorn.run(app, host="0.0.0.0", port=8080)
+
